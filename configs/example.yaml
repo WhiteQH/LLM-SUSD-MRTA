@@ -1,0 +1,117 @@
+# Example configuration: 4 robots, 20 tasks. Runs Group 1 only (llm_runs=1);
+# the CSV contains 20 groups. 2 LLM iterations per group.
+# Simplified from the internal 4R20T experiment config for demonstration purposes.
+general:
+  num_robots: 4
+  num_tasks: 20
+  task_group: 1
+  world_size: 100
+solvers:
+  susd_iterations: 100
+  llm_runs: 1            # number of task groups to run from the CSV
+  llm_iterations: 2      # LLM refinement iterations per group
+  llm_max_context: 10
+  llm_max_retries: 10
+robot_params:
+  start_coords:
+  - - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+  q_matrix:
+  - - 1.0
+    - 1.0
+    - 2.0
+    - 2.0
+  - - 2.0
+    - 2.0
+    - 1.0
+    - 1.0
+task_params:
+  # Resolved relative to this config file's directory (configs/).
+  coordinates_file: ../data/example_4R20T.csv
+api_keys:
+  # NO real credentials are provided. Either set the environment variables
+  # AZURE_OPENAI_KEY / AZURE_OPENAI_ENDPOINT (they take precedence),
+  # or replace the placeholders below with your own credentials.
+  azure_openai_key: YOUR_AZURE_OPENAI_KEY_HERE
+  azure_openai_endpoint: https://YOUR-RESOURCE.openai.azure.com/
+  azure_deployment_name: gpt-4o
+prompts:
+  initial_prompt: |
+    You are an expert in multi-robot task allocation. You need to allocate
+    each task to one and only one robot.
+
+    Your response MUST be ONLY the Python list, with no other text, comments, or explanations.
+
+    IMPORTANT REQUIREMENTS:
+
+    1. Allocate EXACTLY {TOTAL_TASKS} tasks (from 0 to {TOTAL_TASKS_MINUS_1}).
+
+    2. Each task must appear EXACTLY ONCE. No tasks should be missing or duplicated.
+
+    3. Distribute tasks among {NUM_ROBOTS} robots. Each robot must be assigned at
+    least one task.
+
+    Consider both robot abilities and task types, and minimize travel distances.
+
+    Robots:
+
+    {robot_info}
+
+    Tasks:
+
+    {task_info}
+
+    Task Coordinates:
+
+    {task_pos_str}
+
+    Agent Start Positions:
+
+    {agent_pos_str}
+
+    Provide the task allocation matrix in the specified format, and ONLY the matrix.
+
+    [[tasks_for_robot_0], [tasks_for_robot_1], ...]
+  feedback_prompt: |
+    Based on the optimization results from previous iterations:
+
+    {allocations_str}
+
+    Please refine the task allocation based on the latest and best result: {latest_Nb}.
+
+    Your response MUST be ONLY the Python list, with no other text, comments, or explanations.
+
+    IMPORTANT REQUIREMENTS:
+
+    1. Allocate EXACTLY {TOTAL_TASKS} tasks (from 0 to {TOTAL_TASKS_MINUS_1}).
+
+    2. Each task must appear EXACTLY ONCE. No tasks should be missing or duplicated.
+
+    3. Distribute tasks among {NUM_ROBOTS} robots. Each robot must be assigned at
+    least one task.
+
+    Robots:
+
+    {robot_info}
+
+    Tasks:
+
+    {task_info}
+
+    Task Coordinates:
+
+    {task_pos_str}
+
+    Agent Start Positions:
+
+    {agent_pos_str}
+
+    Provide only the refined task allocation matrix in the format:
+
+    [[tasks_for_robot_0], [tasks_for_robot_1], ...]
