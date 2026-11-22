@@ -1,43 +1,60 @@
 # Agentic Task Allocation for Heterogeneous Multi-Robot Systems: A Hybrid LLM and Local Search Approach
 
-This repository provides a **reference implementation** of an LLM+SUSD hybrid
-framework for heterogeneous multi-robot task allocation (MRTA), demonstrated on
-an AUV survey/inspection scenario.
+This repository provides a **reference implementation** of an agentic hybrid
+framework that combines a Large Language Model (LLM) with local search for
+heterogeneous multi-robot task allocation (MRTA), illustrated with an AUV
+survey/inspection-style example.
 
 > **About This Repository / 关于本仓库**
 >
-> - This repository provides a reference implementation of the LLM+SUSD hybrid
->   framework for multi-robot task allocation driven by in-context learning,
->   covering the complete methodological pipeline: LLM initial allocation →
->   path planning → SUSD optimization → validation and iterative refinement.
->   It serves as a methodological and engineering reference for related
->   research.
-> - 本仓库提供 LLM+SUSD 混合框架（In-Context Learning 驱动的多机器人任务分配）
->   的参考实现，涵盖 LLM 初始分配 → 路径规划 → SUSD 优化 → 验证迭代的完整
+> - This repository provides a reference implementation of the hybrid LLM and
+>   local search framework for heterogeneous multi-robot task allocation: an
+>   LLM acts as an agentic allocation initializer that generates informed
+>   candidate allocations, and the Speed-Up Slow-Down (SUSD) derivative-free
+>   local search optimizer refines them numerically, with an external memory
+>   feeding evaluated records back into subsequent prompts. It covers the
+>   complete methodological pipeline — LLM initial allocation → route
+>   evaluation → SUSD refinement → memory-guided iterative feedback — and
+>   serves as a methodological and engineering reference for related research.
+> - 本仓库提供混合 LLM 与局部搜索框架（异构多机器人任务分配）的参考实现：
+>   LLM 作为智能体生成初始任务分配，Speed-Up Slow-Down（SUSD）无导数局部
+>   搜索优化器对其进行数值精炼，外部记忆将已评估的历史记录注入后续提示词。
+>   涵盖 LLM 初始分配 → 路径评估 → SUSD 精炼 → 记忆引导迭代反馈的完整
 >   方法论流程，可作为相关研究的方法论与工程架构参考。
 
 ## Method Overview
 
-The core pipeline (`src/llm_susd_module.py`) iterates the following loop:
+Following the paper's methodology, the core pipeline (`src/llm_susd_module.py`)
+runs an iterative agentic optimization loop coupling LLM-based candidate
+generation, SUSD-based derivative-free refinement, makespan evaluation, and
+external-memory update. Here *agentic* refers to this closed-loop interaction
+among the components; the LLM does not control robot execution.
 
-1. **LLM initial allocation** — an in-context prompt describing robot
-   capabilities, task types and coordinates is sent to an Azure OpenAI
-   deployment; the response is parsed and structurally validated
-   (every task assigned exactly once, no robot left empty).
-2. **Path planning** — a nearest-neighbor greedy route is computed per robot
+1. **LLM-based allocation initialization** — a structured prompt describing
+   robot capabilities, task types and coordinates is sent to an Azure OpenAI
+   deployment; the response is parsed and structurally validated (every task
+   assigned exactly once, no robot left empty), retrying up to 10 times
+   (`llm_max_retries`) on invalid or unparsable responses.
+2. **Route evaluation** — a nearest-neighbor greedy route is computed per robot
    and the makespan of the allocation is evaluated (`src/path_planning.py`,
    `src/greedy_validation.py`).
-3. **SUSD optimization** — the validated allocation seeds a Selective-Undecided
-   Stochastic Diffusion (SUSD) search that stochastically refines the
-   task bundles toward a lower makespan.
-4. **Validation & in-context feedback** — the optimized allocation and its
-   makespan are fed back into the prompt as in-context examples for the next
-   LLM iteration.
+3. **SUSD refinement** — the validated allocation seeds the Speed-Up Slow-Down
+   (SUSD) algorithm, a derivative-free local search optimizer that
+   stochastically refines the task bundles toward a lower makespan.
+4. **Memory-guided feedback** — the initial allocation, the SUSD-refined
+   allocation and the resulting makespan are stored as a memory record and
+   injected into the next iteration's prompt as feedback-conditioned context.
+   The memory keeps the most recent records (FIFO, bounded by
+   `llm_max_context`), adapting subsequent proposals without updating LLM
+   parameters.
+
+The loop repeats for `llm_iterations` outer iterations; the allocations and
+makespans of every iteration are recorded in the result CSV.
 
 ```
-LLM allocation (A1) → greedy path planning (A2) → SUSD optimization (A3)
-        ↑                                              ↓
-        └──── in-context feedback ← re-planning + makespan (A4)
+LLM allocation (A1) → greedy route evaluation (A2) → SUSD refinement (A3)
+        ↑                                               ↓
+        └──── memory-guided feedback ← re-planning + makespan (A4)
 ```
 
 ## Repository Structure
@@ -54,7 +71,7 @@ LLM allocation (A1) → greedy path planning (A2) → SUSD optimization (A3)
 │   ├── data_management.py       # Agent / Task / WorldInfo dataclasses
 │   ├── path_planning.py         # Nearest-neighbor routing & bundle exec time
 │   ├── greedy_validation.py     # Greedy re-planning & makespan evaluation
-│   └── llm_susd_module.py       # Core LLM + SUSD hybrid loop
+│   └── llm_susd_module.py       # Core agentic LLM + SUSD hybrid loop
 ├── configs/
 │   └── example.yaml             # 4-robot / 20-task example configuration
 └── data/
